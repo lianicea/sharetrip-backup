@@ -306,7 +306,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               width: 43,
               height: 43,
               decoration: BoxDecoration(
-                color: notification.color.withOpacity(0.12),
+                color: notification.color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(

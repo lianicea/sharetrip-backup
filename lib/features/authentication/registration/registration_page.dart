@@ -199,7 +199,7 @@ class _StudentRegistrationPageState
                 height: 42,
 
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.13),
+                  color: Colors.white.withValues(alpha: 0.13),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: Colors.white24,
@@ -260,7 +260,7 @@ class _StudentRegistrationPageState
                     Text(
                       'Share the Ride. Connect with Students.',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                         fontSize: 11,
                       ),
                     ),
@@ -281,7 +281,7 @@ class _StudentRegistrationPageState
             ),
 
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
+              color: Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(25),
               border: Border.all(
                 color: Colors.white24,
@@ -491,7 +491,7 @@ class _StudentRegistrationPageState
           const SizedBox(height: 7),
 
           DropdownButtonFormField<String>(
-            value: selectedCourse,
+            initialValue: selectedCourse,
             isExpanded: true,
 
             style: const TextStyle(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../profile/profile_page.dart';
 import '../my_rides/my_rides_page.dart';
 import '../find_ride/find_ride_page.dart';
+import '../chat/chat_page.dart';
 import '../../../core/constants/app_colors.dart';
 
 class StudentHomePage extends StatefulWidget {
@@ -95,6 +96,11 @@ class _StudentHomePageState extends State<StudentHomePage> {
       'activeIcon': Icons.notifications,
     },
     {
+      'title': 'Messages',
+      'icon': Icons.chat_bubble_outline,
+      'activeIcon': Icons.chat_bubble,
+    },
+    {
       'title': 'Profile',
       'icon': Icons.person_outline,
       'activeIcon': Icons.person,
@@ -171,6 +177,22 @@ class _StudentHomePageState extends State<StudentHomePage> {
         content: Text(message),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // FRONTEND-ONLY DRIVER CHAT
+  void _openDriverChat({
+    required String driverName,
+    required String vehicle,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DriverChatPage(
+          driverName: driverName,
+          vehicle: vehicle,
+        ),
       ),
     );
   }
@@ -995,8 +1017,9 @@ class _StudentHomePageState extends State<StudentHomePage> {
                 child: _rideActionButton(
                   'Contact',
                   Icons.chat_outlined,
-                  () => _showMessage(
-                    'Driver messaging will be added later.',
+                  () => _openDriverChat(
+                    driverName: 'Alex Santos',
+                    vehicle: 'Toyota Vios · ABC 1234',
                   ),
                 ),
               ),
@@ -1693,26 +1716,269 @@ class _StudentHomePageState extends State<StudentHomePage> {
   // BUILD
   // ==========================================
 
+  
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: AppColors.background,
+    body: SafeArea(
+      child: selectedIndex == 0
+          ? _buildHome()
+          : selectedIndex == 1
+              ? const FindRidePage()
+              : selectedIndex == 2
+                  ? const MyRidesPage()
+                  : selectedIndex == 3
+                      ? _buildNotifications()
+                      : selectedIndex == 4
+                          ? const ChatPage()
+                          : ProfilePage(
+                              studentName: widget.studentName,
+                              schoolEmail: widget.schoolEmail,
+                              course: widget.course,
+                            ),
+    ),
+    bottomNavigationBar: _buildBottomNavigation(),
+  );
+}
+
+}
+
+
+
+// =====================================================
+// DRIVER CHAT PAGE (FRONTEND DEMO ONLY)
+// =====================================================
+class DriverChatPage extends StatefulWidget {
+  final String driverName;
+  final String vehicle;
+
+  const DriverChatPage({
+    super.key,
+    required this.driverName,
+    required this.vehicle,
+  });
+
+  @override
+  State<DriverChatPage> createState() => _DriverChatPageState();
+}
+
+class _DriverChatPageState extends State<DriverChatPage> {
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  final List<Map<String, dynamic>> _messages = [
+    {
+      'text': 'Hello! I am your driver. Please message me if you have any updates.',
+      'isMe': false,
+      'time': '8:30 AM',
+    },
+    {
+      'text': 'Hello, noted. Thank you!',
+      'isMe': true,
+      'time': '8:32 AM',
+    },
+  ];
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _sendMessage() {
+    final String text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _messages.add({
+        'text': text,
+        'isMe': true,
+        'time': TimeOfDay.now().format(context),
+      });
+    });
+    _messageController.clear();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: selectedIndex == 0
-            ? _buildHome()
-            : selectedIndex == 1
-                ? const FindRidePage()
-                : selectedIndex == 2
-                    ? const MyRidesPage()
-                    : selectedIndex == 3
-                        ? _buildNotifications()
-                        : ProfilePage(
-                            studentName: widget.studentName,
-                            schoolEmail: widget.schoolEmail,
-                            course: widget.course,
-                          ),
+      backgroundColor: const Color(0xFFF6F5FA),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const CircleAvatar(
+              radius: 19,
+              backgroundColor: Colors.white24,
+              child: Icon(Icons.person, color: Colors.white),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.driverName,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    widget.vehicle,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      bottomNavigationBar: _buildBottomNavigation(),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            color: const Color(0xFFECE7FA),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.info_outline, size: 14, color: AppColors.primary),
+                SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'Demo chat only. Messages are not sent to a real driver.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 10, color: AppColors.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final message = _messages[index];
+                final bool isMe = message['isMe'] == true;
+                return Align(
+                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.76,
+                    ),
+                    margin: const EdgeInsets.only(bottom: 11),
+                    padding: const EdgeInsets.fromLTRB(13, 10, 13, 7),
+                    decoration: BoxDecoration(
+                      color: isMe ? AppColors.primary : Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(15),
+                        topRight: const Radius.circular(15),
+                        bottomLeft: Radius.circular(isMe ? 15 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 15),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          message['text'] as String,
+                          style: TextStyle(
+                            color: isMe ? Colors.white : AppColors.textPrimary,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          message['time'] as String,
+                          style: TextStyle(
+                            color: isMe ? Colors.white70 : AppColors.textSecondary,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      minLines: 1,
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
+                      onSubmitted: (_) => _sendMessage(),
+                      decoration: InputDecoration(
+                        hintText: 'Type a message...',
+                        filled: true,
+                        fillColor: const Color(0xFFF3F1F8),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 11,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Material(
+                    color: AppColors.primary,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _sendMessage,
+                      child: const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Icon(Icons.send, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

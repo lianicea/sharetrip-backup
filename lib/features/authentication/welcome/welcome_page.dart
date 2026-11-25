@@ -39,7 +39,7 @@ class WelcomePage extends StatelessWidget {
                             width: 88,
                             height: 88,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
+                              color: Colors.white.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(25),
                               border: Border.all(
                                 color: Colors.white24,
@@ -95,7 +95,7 @@ class WelcomePage extends StatelessWidget {
                               vertical: 9,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.12),
+                              color: Colors.white.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(30),
                             ),
                             child: const Row(
@@ -178,7 +178,7 @@ class WelcomePage extends StatelessWidget {
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
                                 backgroundColor:
-                                    Colors.white.withOpacity(0.07),
+                                    Colors.white.withValues(alpha: 0.07),
                                 side: const BorderSide(
                                   color: Colors.white24,
                                 ),

@@ -466,8 +466,8 @@ class _RideMapPageState extends State<RideMapPage> {
                     ),
 
                     // MAP ATTRIBUTION
-                    RichAttributionWidget(
-                      attributions: [
+                    const RichAttributionWidget(
+                      attributions: const [
                         TextSourceAttribution(
                           'OpenStreetMap contributors',
                         ),

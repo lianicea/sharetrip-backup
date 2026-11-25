@@ -78,7 +78,7 @@ class _LocationTestPageState extends State<LocationTestPage> {
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 15,
                   offset: const Offset(0, 4),
                 ),
@@ -180,7 +180,7 @@ class _LocationTestPageState extends State<LocationTestPage> {
                     padding: const EdgeInsets.all(13),
 
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.07),
+                      color: Colors.red.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(10),
                     ),
 
