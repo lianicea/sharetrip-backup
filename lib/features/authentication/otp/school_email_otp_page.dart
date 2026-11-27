@@ -17,19 +17,23 @@ class SchoolEmailOtpPage extends StatefulWidget {
   });
 
   @override
-  State<SchoolEmailOtpPage> createState() => _SchoolEmailOtpPageState();
+  State<SchoolEmailOtpPage> createState() =>
+      _SchoolEmailOtpPageState();
 }
 
 class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
+  static const int _otpLength = 6;
+  static const int _resendCooldown = 60;
+
   final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
+      List.generate(_otpLength, (_) => TextEditingController());
 
   final List<FocusNode> _focusNodes =
-      List.generate(6, (_) => FocusNode());
+      List.generate(_otpLength, (_) => FocusNode());
 
   Timer? _timer;
 
-  int secondsRemaining = 60;
+  int secondsRemaining = _resendCooldown;
 
   String? errorMessage;
 
@@ -45,6 +49,10 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
     _startTimer();
   }
 
+  // ==========================================
+  // OTP TIMER
+  // ==========================================
+
   void _startTimer() {
     _timer?.cancel();
 
@@ -57,14 +65,29 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
         }
 
         if (secondsRemaining <= 1) {
-          setState(() => secondsRemaining = 0);
+          setState(() {
+            secondsRemaining = 0;
+          });
           timer.cancel();
         } else {
-          setState(() => secondsRemaining--);
+          setState(() {
+            secondsRemaining--;
+          });
         }
       },
     );
   }
+
+  String get formattedTime {
+    final minutes = secondsRemaining ~/ 60;
+    final seconds = secondsRemaining % 60;
+
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  // ==========================================
+  // DISPOSE
+  // ==========================================
 
   @override
   void dispose() {
@@ -81,35 +104,51 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
     super.dispose();
   }
 
+  // ==========================================
+  // OTP INPUT
+  // ==========================================
+
   void _clearOtp() {
     for (final controller in _controllers) {
       controller.clear();
     }
 
-    _focusNodes[0].requestFocus();
+    if (mounted) {
+      _focusNodes[0].requestFocus();
+    }
   }
 
   void _onOtpChanged(String value, int index) {
-    if (value.length > 1) {
-      final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (_isVerifying) return;
 
-      for (int i = 0; i < 6; i++) {
+    setState(() {
+      errorMessage = null;
+    });
+
+    // Support pasting a complete OTP.
+    if (value.length > 1) {
+      final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+
+      for (int i = 0; i < _otpLength; i++) {
         _controllers[i].text =
             i < digits.length ? digits[i] : '';
       }
 
-      final nextIndex = digits.length.clamp(0, 5);
+      final nextIndex = digits.length >= _otpLength
+          ? _otpLength - 1
+          : digits.length;
 
       _focusNodes[nextIndex].requestFocus();
 
-      setState(() => errorMessage = null);
+      if (digits.length >= _otpLength) {
+        _focusNodes[_otpLength - 1].unfocus();
+      }
+
       return;
     }
 
-    setState(() => errorMessage = null);
-
     if (value.isNotEmpty) {
-      if (index < 5) {
+      if (index < _otpLength - 1) {
         _focusNodes[index + 1].requestFocus();
       } else {
         _focusNodes[index].unfocus();
@@ -119,11 +158,15 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
     }
   }
 
+  // ==========================================
+  // ERROR HANDLING
+  // ==========================================
+
   String _friendlyOtpError(String message) {
     final lower = message.toLowerCase();
 
     if (lower.contains('expired')) {
-      return 'Your verification code has expired. Request a new one.';
+      return 'Your verification code has expired. Please request a new one.';
     }
 
     if (lower.contains('invalid') ||
@@ -137,13 +180,21 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
       return 'Too many attempts. Please wait before trying again.';
     }
 
+    if (lower.contains('email not confirmed')) {
+      return 'Your email is not yet verified. Please try again.';
+    }
+
     return message;
   }
 
-  Future<void> _verifyOtp() async {
-    if (_isVerifying) return;
+  // ==========================================
+  // VERIFY OTP
+  // ==========================================
 
-    if (enteredOtp.length != 6) {
+  Future<void> _verifyOtp() async {
+    if (_isVerifying || _isResending) return;
+
+    if (enteredOtp.length != _otpLength) {
       setState(() {
         errorMessage = 'Please enter all 6 digits of your code.';
       });
@@ -164,6 +215,7 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
       if (!mounted) return;
 
       _timer?.cancel();
+
       _showSuccessDialog();
     } on AuthException catch (error) {
       if (!mounted) return;
@@ -175,18 +227,30 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
       if (!mounted) return;
 
       setState(() {
-        errorMessage =
-            error.toString().replaceFirst('Exception: ', '');
+        errorMessage = error.toString().replaceFirst(
+          'Exception: ',
+          '',
+        );
       });
     } finally {
       if (mounted) {
-        setState(() => _isVerifying = false);
+        setState(() {
+          _isVerifying = false;
+        });
       }
     }
   }
 
+  // ==========================================
+  // RESEND OTP
+  // ==========================================
+
   Future<void> _resendOtp() async {
-    if (secondsRemaining > 0 || _isResending) return;
+    if (secondsRemaining > 0 ||
+        _isResending ||
+        _isVerifying) {
+      return;
+    }
 
     setState(() {
       _isResending = true;
@@ -203,7 +267,7 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
       _clearOtp();
 
       setState(() {
-        secondsRemaining = 60;
+        secondsRemaining = _resendCooldown;
       });
 
       _startTimer();
@@ -226,22 +290,23 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
       if (!mounted) return;
 
       setState(() {
-        errorMessage =
-            error.toString().replaceFirst('Exception: ', '');
+        errorMessage = error.toString().replaceFirst(
+          'Exception: ',
+          '',
+        );
       });
     } finally {
       if (mounted) {
-        setState(() => _isResending = false);
+        setState(() {
+          _isResending = false;
+        });
       }
     }
   }
 
-  String get formattedTime {
-    final minutes = secondsRemaining ~/ 60;
-    final seconds = secondsRemaining % 60;
-
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
+  // ==========================================
+  // SUCCESS DIALOG
+  // ==========================================
 
   void _showSuccessDialog() {
     showDialog(
@@ -301,14 +366,18 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: const Text(
                   'Continue to ShareTrip',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -317,6 +386,10 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
       },
     );
   }
+
+  // ==========================================
+  // OTP INPUT BOX
+  // ==========================================
 
   Widget _otpInputBox(int index) {
     return Expanded(
@@ -330,6 +403,7 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
             maxLength: 6,
+            enabled: !_isVerifying && !_isResending,
             inputFormatters: [
               FilteringTextInputFormatter.digitsOnly,
               LengthLimitingTextInputFormatter(6),
@@ -366,12 +440,18 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                 ),
               ),
             ),
-            onChanged: (value) => _onOtpChanged(value, index),
+            onChanged: (value) {
+              _onOtpChanged(value, index);
+            },
           ),
         ),
       ),
     );
   }
+
+  // ==========================================
+  // HEADER
+  // ==========================================
 
   Widget _buildHeader() {
     return Container(
@@ -409,7 +489,7 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.16),
+                  color: Colors.white.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
@@ -446,6 +526,10 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
       ),
     );
   }
+
+  // ==========================================
+  // BUILD PAGE
+  // ==========================================
 
   @override
   Widget build(BuildContext context) {
@@ -500,7 +584,9 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                               borderRadius: BorderRadius.circular(23),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withOpacity(0.18),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.18,
+                                  ),
                                   blurRadius: 20,
                                   offset: const Offset(0, 8),
                                 ),
@@ -570,7 +656,7 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                         const SizedBox(height: 14),
                         Row(
                           children: List.generate(
-                            6,
+                            _otpLength,
                             (index) => _otpInputBox(index),
                           ),
                         ),
@@ -602,7 +688,7 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                           child: Column(
                             children: [
                               const Text(
-                                'Your code expires soon',
+                                'Enter the code from your email',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textSecondary,
@@ -610,7 +696,8 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                               ),
                               const SizedBox(height: 7),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.timer_outlined,
@@ -645,8 +732,9 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                               borderRadius: BorderRadius.circular(13),
                             ),
                             child: ElevatedButton(
-                              onPressed:
-                                  _isVerifying ? null : _verifyOtp,
+                              onPressed: _isVerifying || _isResending
+                                  ? null
+                                  : _verifyOtp,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.transparent,
                                 disabledBackgroundColor:
@@ -680,7 +768,8 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                         Center(
                           child: Wrap(
                             alignment: WrapAlignment.center,
-                            crossAxisAlignment: WrapCrossAlignment.center,
+                            crossAxisAlignment:
+                                WrapCrossAlignment.center,
                             children: [
                               const Text(
                                 "Didn't receive the code?",
@@ -690,11 +779,11 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                                 ),
                               ),
                               TextButton(
-                                onPressed:
-                                    secondsRemaining == 0 &&
-                                            !_isResending
-                                        ? _resendOtp
-                                        : null,
+                                onPressed: secondsRemaining == 0 &&
+                                        !_isResending &&
+                                        !_isVerifying
+                                    ? _resendOtp
+                                    : null,
                                 child: Text(
                                   _isResending
                                       ? 'Sending...'
@@ -723,7 +812,8 @@ class _SchoolEmailOtpPageState extends State<SchoolEmailOtpPage> {
                             ),
                           ),
                           child: const Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
                             children: [
                               Icon(
                                 Icons.shield_rounded,

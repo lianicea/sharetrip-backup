@@ -1,13 +1,16 @@
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/sharetrip_auth_service.dart';
+import '../../student/home/student_home_page.dart';
 
 class StudentLoginPage extends StatefulWidget {
   const StudentLoginPage({super.key});
 
   @override
-  State<StudentLoginPage> createState() =>
-      _StudentLoginPageState();
+  State<StudentLoginPage> createState() => _StudentLoginPageState();
 }
 
 class _StudentLoginPageState extends State<StudentLoginPage> {
@@ -20,6 +23,7 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
       TextEditingController();
 
   bool _isPasswordVisible = false;
+  bool _isLoggingIn = false;
 
   @override
   void dispose() {
@@ -28,20 +32,8 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
     super.dispose();
   }
 
-  void _login() {
-    if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Login form is valid. Authentication will be connected later.',
-          ),
-        ),
-      );
-    }
-  }
-
   // ==========================================
-  // COMPACT INPUT DECORATION
+  // INPUT DECORATION
   // ==========================================
 
   InputDecoration _inputDecoration({
@@ -55,49 +47,39 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
         fontSize: 13,
         color: AppColors.textSecondary,
       ),
-
       prefixIcon: Icon(
         icon,
-        size: 19,
+        size: 18,
         color: AppColors.textSecondary,
       ),
-
       prefixIconConstraints: const BoxConstraints(
         minWidth: 42,
         minHeight: 42,
       ),
-
       suffixIcon: suffixIcon,
-
       suffixIconConstraints: const BoxConstraints(
         minWidth: 42,
         minHeight: 42,
       ),
-
       isDense: true,
-
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 13,
         vertical: 12,
       ),
-
       filled: true,
       fillColor: Colors.white,
-
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
           color: AppColors.border,
         ),
       ),
-
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
           color: AppColors.border,
         ),
       ),
-
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
@@ -105,14 +87,12 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
           width: 1.3,
         ),
       ),
-
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
           color: AppColors.danger,
         ),
       ),
-
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
@@ -128,13 +108,166 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
 
   Widget _fieldLabel(String text) {
     return Text(
-      text,
+      text.toUpperCase(),
       style: const TextStyle(
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
+        color: AppColors.textSecondary,
       ),
     );
+  }
+
+  // ==========================================
+  // LOGIN ERROR HANDLING
+  // ==========================================
+
+  String _friendlyLoginError(String message) {
+    final lower = message.toLowerCase();
+
+    if (lower.contains('invalid login credentials')) {
+      return 'Incorrect school email or password. Please try again.';
+    }
+
+    if (lower.contains('email not confirmed') ||
+        lower.contains('email_not_confirmed')) {
+      return 'Your school email is not verified yet. Please complete OTP verification.';
+    }
+
+    if (lower.contains('network') ||
+        lower.contains('socketexception')) {
+      return 'Unable to connect. Please check your internet connection.';
+    }
+
+    if (lower.contains('too many requests') ||
+        lower.contains('rate limit')) {
+      return 'Too many login attempts. Please wait and try again.';
+    }
+
+    return message;
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ==========================================
+  // LOGIN ACTION
+  // ==========================================
+
+  Future<void> _login() async {
+    if (_isLoggingIn) return;
+
+    FocusScope.of(context).unfocus();
+
+    if (!_formKey.currentState!.validate()) return;
+
+    final email = ShareTripAuthService.normalizeEmail(
+      _emailController.text,
+    );
+
+    final password = _passwordController.text;
+
+    setState(() {
+      _isLoggingIn = true;
+    });
+
+    try {
+      // Authenticate using Supabase.
+      final response =
+          await ShareTripAuthService.instance.signIn(
+        email: email,
+        password: password,
+      );
+
+      final user = response.user;
+
+      if (user == null) {
+        throw const AuthException(
+          'Unable to retrieve your account. Please try again.',
+        );
+      }
+
+      // Retrieve the authenticated user's profile.
+      final profile =
+          await ShareTripAuthService.instance.getProfile(
+        user.id,
+      );
+
+      // Make sure this is a student account.
+      final role = (profile['role'] ?? '')
+          .toString()
+          .toLowerCase();
+
+      if (role != 'student') {
+        await ShareTripAuthService.instance.signOut();
+
+        if (!mounted) return;
+
+        _showError(
+          'This account is not registered as a student. Please use the correct login portal.',
+        );
+        return;
+      }
+
+      // Check whether the account has verified its email.
+      if (user.emailConfirmedAt == null) {
+        await ShareTripAuthService.instance.signOut();
+
+        if (!mounted) return;
+
+        _showError(
+          'Your school email is not verified. Please complete OTP verification.',
+        );
+        return;
+      }
+
+      final fullName =
+          (profile['full_name'] ?? 'Student').toString();
+
+      final details = profile['details'] is Map
+          ? Map<String, dynamic>.from(profile['details'] as Map)
+          : <String, dynamic>{};
+
+      final course = (details['course'] ?? '').toString();
+
+      if (!mounted) return;
+
+      // Navigate to Student Home.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => StudentHomePage(
+            studentName: fullName,
+            schoolEmail: email,
+            course: course,
+          ),
+        ),
+        (route) => false,
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+
+      _showError(
+        _friendlyLoginError(error.message),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      _showError(
+        error.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingIn = false;
+        });
+      }
+    }
   }
 
   // ==========================================
@@ -149,14 +282,15 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back_ios_new,
             size: 19,
             color: AppColors.textPrimary,
           ),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isLoggingIn
+              ? null
+              : () => Navigator.pop(context),
         ),
       ),
 
@@ -187,12 +321,10 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
                       child: Container(
                         width: 65,
                         height: 65,
-
                         decoration: BoxDecoration(
                           gradient: AppColors.buttonGradient,
                           borderRadius: BorderRadius.circular(19),
                         ),
-
                         child: const Icon(
                           Icons.hub_outlined,
                           color: Colors.white,
@@ -241,30 +373,25 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
-
+                      autocorrect: false,
+                      enabled: !_isLoggingIn,
                       style: const TextStyle(
                         fontSize: 13,
                       ),
-
                       decoration: _inputDecoration(
-                        hint: 'Enter your school email',
+                        hint: 'name@cmdi.edu.ph',
                         icon: Icons.email_outlined,
                       ),
-
                       validator: (value) {
                         if (value == null ||
                             value.trim().isEmpty) {
                           return 'Please enter your school email.';
                         }
 
-                        final emailPattern = RegExp(
-                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                        );
-
-                        if (!emailPattern.hasMatch(
-                          value.trim(),
+                        if (!ShareTripAuthService.isValidSchoolEmail(
+                          value,
                         )) {
-                          return 'Enter a valid email address.';
+                          return 'Use your CMDI school email (@cmdi.edu.ph).';
                         }
 
                         return null;
@@ -283,39 +410,35 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
                       controller: _passwordController,
                       obscureText: !_isPasswordVisible,
                       textInputAction: TextInputAction.done,
+                      enabled: !_isLoggingIn,
                       onFieldSubmitted: (_) => _login(),
-
                       style: const TextStyle(
                         fontSize: 13,
                       ),
-
                       decoration: _inputDecoration(
                         hint: 'Enter your password',
                         icon: Icons.lock_outline,
-
                         suffixIcon: IconButton(
                           padding: EdgeInsets.zero,
-
-                          onPressed: () {
-                            setState(() {
-                              _isPasswordVisible =
-                                  !_isPasswordVisible;
-                            });
-                          },
-
+                          onPressed: _isLoggingIn
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _isPasswordVisible =
+                                        !_isPasswordVisible;
+                                  });
+                                },
                           icon: Icon(
                             _isPasswordVisible
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            size: 19,
+                            size: 18,
                             color: AppColors.textSecondary,
                           ),
                         ),
                       ),
-
                       validator: (value) {
-                        if (value == null ||
-                            value.isEmpty) {
+                        if (value == null || value.isEmpty) {
                           return 'Please enter your password.';
                         }
 
@@ -331,36 +454,42 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
                       child: SizedBox(
                         width: 260,
                         height: 44,
-
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             gradient: AppColors.buttonGradient,
                             borderRadius: BorderRadius.circular(12),
                           ),
-
                           child: ElevatedButton(
-                            onPressed: _login,
-
+                            onPressed:
+                                _isLoggingIn ? null : _login,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
+                              disabledBackgroundColor:
+                                  Colors.transparent,
                               foregroundColor: Colors.white,
                               shadowColor: Colors.transparent,
-
                               padding: EdgeInsets.zero,
-
                               shape: RoundedRectangleBorder(
                                 borderRadius:
                                     BorderRadius.circular(12),
                               ),
                             ),
-
-                            child: const Text(
-                              'Log In',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            child: _isLoggingIn
+                                ? const SizedBox(
+                                    width: 19,
+                                    height: 19,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Log In',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
@@ -379,9 +508,7 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
                             color: AppColors.primary,
                             size: 16,
                           ),
-
                           SizedBox(width: 6),
-
                           Flexible(
                             child: Text(
                               'School-verified community rides',
