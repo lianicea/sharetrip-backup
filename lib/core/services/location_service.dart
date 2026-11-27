@@ -1,37 +1,32 @@
-
 import 'package:geolocator/geolocator.dart';
 
+/// One GPS implementation shared by student maps and driver trip tracking.
 class LocationService {
   Future<void> checkPermission() async {
-    final serviceEnabled =
-        await Geolocator.isLocationServiceEnabled();
-
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      throw Exception('Location services are disabled.');
+      throw Exception('Location services are disabled. Turn on device location and retry.');
     }
 
-    LocationPermission permission =
-        await Geolocator.checkPermission();
-
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
 
     if (permission == LocationPermission.denied) {
-      throw Exception('Location permission denied.');
+      throw Exception('Location permission denied. Allow location access for ShareTrip.');
     }
-
     if (permission == LocationPermission.deniedForever) {
-      throw Exception(
-        'Location permission permanently denied.',
-      );
+      throw Exception('Location permission is blocked. Enable it in browser or device settings.');
+    }
+    if (permission == LocationPermission.unableToDetermine) {
+      throw Exception('The browser could not determine location permission. Check site permissions.');
     }
   }
 
   Future<Position> getCurrentLocation() async {
     await checkPermission();
-
-    return await Geolocator.getCurrentPosition(
+    return Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         timeLimit: Duration(seconds: 30),
@@ -41,14 +36,11 @@ class LocationService {
 
   Stream<Position> getLocationStream() async* {
     await checkPermission();
-
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.best,
-      distanceFilter: 1,
-    );
-
     yield* Geolocator.getPositionStream(
-      locationSettings: settings,
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 3,
+      ),
     );
   }
 }

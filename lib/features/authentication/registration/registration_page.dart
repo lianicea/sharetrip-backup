@@ -2,6 +2,8 @@ import '../../student/home/student_home_page.dart';
 import '../otp/school_email_otp_page.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/sharetrip_auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class StudentRegistrationPage extends StatefulWidget {
   const StudentRegistrationPage({super.key});
@@ -37,6 +39,7 @@ class _StudentRegistrationPageState
 
   bool _showPassword = false;
   bool _showConfirmPassword = false;
+  bool _isCreatingAccount = false;
 
   // ==========================================
   // PASSWORD REQUIREMENTS
@@ -432,12 +435,14 @@ class _StudentRegistrationPageState
                 return 'Please enter your school email.';
               }
 
-              final emailPattern = RegExp(
-                r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-              );
+              final email = value.trim();
+              final isValidSchoolEmail = RegExp(
+                r'^[A-Z0-9._%+-]+@cmdi\.edu\.ph$',
+                caseSensitive: false,
+              ).hasMatch(email);
 
-              if (!emailPattern.hasMatch(value.trim())) {
-                return 'Enter a valid email address.';
+              if (!isValidSchoolEmail) {
+                return 'Use your CMDI school email (@cmdi.edu.ph).';
               }
 
               return null;
@@ -835,7 +840,7 @@ class _StudentRegistrationPageState
                 ),
 
                 child: ElevatedButton(
-                  onPressed: _createAccount,
+                  onPressed: _isCreatingAccount ? null : _createAccount,
 
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
@@ -848,13 +853,24 @@ class _StudentRegistrationPageState
                     ),
                   ),
 
-                  child: const Text(
-                    'Create Account',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isCreatingAccount
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Text(
+                          'Create Account',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -871,72 +887,117 @@ class _StudentRegistrationPageState
   // ==========================================
 
   
-Future<void> _createAccount() async {
-  if (!_stepTwoKey.currentState!.validate()) {
-    return;
-  }
+  Future<void> _createAccount() async {
+    if (_isCreatingAccount) return;
 
-  final verified = await Navigator.push<bool>(
-    context,
-    MaterialPageRoute(
-      builder: (_) => SchoolEmailOtpPage(
-        email: _emailController.text.trim(),
-      ),
-    ),
-  );
+    // Step 1 was already validated before the user moved to step 2.
+    if (!_stepTwoKey.currentState!.validate()) return;
 
-  if (verified != true || !mounted) {
-    return;
-  }
+    final fullName = _nameController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
+    final contactNumber = _contactController.text.trim();
+    final course = selectedCourse ?? '';
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
+    setState(() {
+      _isCreatingAccount = true;
+    });
 
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text(
-          'Email Verified!',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-
-        content: const Text(
-          'Your school email passed the demo verification. '
-          'Actual account creation will be connected after backend setup.',
-        ),
-
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-                Navigator.pop(dialogContext);
-
-                Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                    builder: (_) => StudentHomePage(
-                        studentName: _nameController.text.trim(),
-                        schoolEmail: _emailController.text.trim(),
-                        course: selectedCourse ?? 'Student',
-                    ),
-                    ),
-                    (route) => false,
-                );
-                },
-
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-
-            child: const Text('Done'),
-          ),
-        ],
+    try {
+      await ShareTripAuthService.instance.signUp(
+        fullName: fullName,
+        email: email,
+        password: _passwordController.text,
+        role: 'student',
+        profileDetails: <String, dynamic>{
+          'contact_number': contactNumber,
+          'course': course,
+        },
       );
-    },
-  );
-}
 
+      if (!mounted) return;
+
+      final verified = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SchoolEmailOtpPage(email: email),
+        ),
+      );
+
+      if (verified != true || !mounted) return;
+
+      final user = ShareTripAuthService.instance.currentUser;
+      if (user == null) {
+        throw Exception(
+          'Email verified, but no authenticated session was found. '
+          'Please log in using your school email.',
+        );
+      }
+
+      await ShareTripAuthService.instance.saveProfileDetails(
+        userId: user.id,
+        details: <String, dynamic>{
+          'contact_number': contactNumber,
+          'course': course,
+        },
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => StudentHomePage(
+            studentName: fullName,
+            schoolEmail: email,
+            course: course,
+          ),
+        ),
+        (route) => false,
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      _showRegistrationError(_friendlyAuthError(error.message));
+    } catch (error) {
+      if (!mounted) return;
+      _showRegistrationError(
+        error.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingAccount = false;
+        });
+      }
+    }
+  }
+
+  String _friendlyAuthError(String message) {
+    final lower = message.toLowerCase();
+
+    if (lower.contains('already registered') ||
+        lower.contains('already been registered') ||
+        lower.contains('user already')) {
+      return 'This school email is already registered. Please log in instead.';
+    }
+    if (lower.contains('password')) {
+      return 'Your password does not meet the account security requirements.';
+    }
+    if (lower.contains('error sending confirmation email') ||
+        lower.contains('sending confirmation email') ||
+        lower.contains('smtp')) {
+      return 'Supabase could not send the verification email. Configure SMTP in Supabase Authentication settings, then try again. Details: $message';
+    }
+    // Do not hide other Supabase errors behind a generic email-format message.
+    return message;
+  }
+
+  void _showRegistrationError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.danger,
+      ),
+    );
+  }
 
   // ==========================================
   // BUILD PAGE

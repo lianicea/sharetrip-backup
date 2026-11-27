@@ -3,6 +3,8 @@ import '../registration/registration_page.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../login/login_page.dart';
+import '../../driver/driver_portal_page.dart';
+import '../../driver/driver_registration_page.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
@@ -161,19 +163,79 @@ class WelcomePage extends StatelessWidget {
 
                           const SizedBox(height: 12),
 
+                          // Separate Driver Portal
+                          SizedBox(
+                            width: 260,
+                            height: 46,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const DriverLoginPage(),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.directions_car_outlined, size: 18),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: Colors.white.withValues(alpha: 0.07),
+                                side: const BorderSide(color: Colors.white24),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              label: const Text(
+                                'Driver Portal',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
                           // Register Button
                           SizedBox(
                             width: 260,
                             height: 46,
                             child: OutlinedButton(
-                            onPressed: () {
-                                Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) =>
-                                        const StudentRegistrationPage(),
-                                ),
+                            onPressed: () async {
+                                final role = await showModalBottomSheet<String>(
+                                  context: context,
+                                  builder: (sheetContext) => SafeArea(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(20),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          const Text('Register as', textAlign: TextAlign.center,
+                                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                          const SizedBox(height: 14),
+                                          OutlinedButton.icon(
+                                            onPressed: () => Navigator.pop(sheetContext, 'student'),
+                                            icon: const Icon(Icons.school_outlined),
+                                            label: const Text('Student'),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed: () => Navigator.pop(sheetContext, 'driver'),
+                                            icon: const Icon(Icons.drive_eta_outlined),
+                                            label: const Text('Driver'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 );
+                                if (!context.mounted || role == null) return;
+                                Navigator.push(context, MaterialPageRoute(
+                                  builder: (_) => role == 'driver'
+                                    ? const DriverRegistrationPage()
+                                    : const StudentRegistrationPage(),
+                                ));
                             },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
