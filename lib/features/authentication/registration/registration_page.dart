@@ -435,9 +435,9 @@ class _StudentRegistrationPageState
             ),
             items: const [
               DropdownMenuItem(
-                value: 'BS Information Technology',
+                value: 'BS Information Accountancy Information Systems',
                 child: Text(
-                  'BS Information Technology',
+                  'BS Information Accountancy Information System',
                   style: TextStyle(fontSize: 13),
                 ),
               ),
@@ -449,16 +449,30 @@ class _StudentRegistrationPageState
                 ),
               ),
               DropdownMenuItem(
-                value: 'BS Business Administration',
+                value: 'BS Business Entrepreneurship',
                 child: Text(
-                  'BS Business Administration',
+                  'BS Business Entrepreneurship',
                   style: TextStyle(fontSize: 13),
                 ),
               ),
               DropdownMenuItem(
-                value: 'BS Education',
+                value: 'BS Accountancy',
                 child: Text(
-                  'BS Education',
+                  'BS Accountancy',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+              DropdownMenuItem(
+                value: 'BS Tourism Management',
+                child: Text(
+                  'BS Tourism Management',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+              DropdownMenuItem(
+                value: 'BS Criminology',
+                child: Text(
+                  'BS Criminology',
                   style: TextStyle(fontSize: 13),
                 ),
               ),
